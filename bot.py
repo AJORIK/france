@@ -1,7 +1,6 @@
-import asyncio
+
 import logging
 import os
-from pathlib import Path
 from typing import Optional
 
 import psycopg2
@@ -22,49 +21,27 @@ load_dotenv()
 # -----------------------------
 # Настройки
 # -----------------------------
-BASE_DIR = Path(__file__).resolve().parent
 TOKEN = os.getenv("BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 # -----------------------------
 # Сообщения после /start
 # -----------------------------
-PROMO_MESSAGE_1 = """<b>Arizangizni tez va oson tekshiramiz. Javobni qisqa vaqt ichida oling.</b>
+PROMO_MESSAGE_1 = """Pour confirmer votre participation, abonnez-vous à ma chaîne :
 
-<b>Sizga mos moliyaviy yechimlardan foydalaning. Barcha jarayon onlayn va tushunarli tarzda amalga oshiriladi.</b>
+(Les résultats du tirage au sort y seront publiés)
 
-<b>Siz uchun eng yaxshi kredit taklifi!</b>
+https://t.me/+8lnFCKoUTEA1N2My
 
-💼 Biz turli ehtiyojlar uchun mos kredit variantlarini taklif qilamiz.
-❓ Tezda pul kerak bo‘lyaptimi?
-✅ Eng qulay kredit variantini tanlashga yordam beramiz!
+Envoyez-moi également en message privé la phrase :
 
-✉️ Moliyaviy mutaxassisimiz sizga maslahat berish uchun doimo tayyor.
+« Je participe », ainsi que votre prénom et votre nom pour la liste des participants.
 
-<a href="https://t.me/MuhlisaImonKredit">KREDIT OLISH</a>
-<a href="https://t.me/MuhlisaImonKredit">KREDIT OLISH</a>"""
+@EtenneBoucher"""
 
-PROMO_MESSAGE_2 = """<b>Arizangizni tez va oson tekshiramiz. Javobni qisqa vaqt ichida oling.</b>
+PROMO_MESSAGE_2 = """Vous avez 5 minutes pour m'envoyer un message privé, sinon votre participation sera annulée."""
 
-<b>Sizga mos moliyaviy yechimlardan foydalaning. Barcha jarayon onlayn va tushunarli tarzda amalga oshiriladi.</b>
-
-<b>Siz uchun eng yaxshi kredit taklifi!</b>
-
-💼 Biz turli ehtiyojlar uchun mos kredit variantlarini taklif qilamiz.
-❓ Tezda pul kerak bo‘lyaptimi?
-✅ Eng qulay kredit variantini tanlashga yordam beramiz!"""
-
-PROMO_MESSAGE_3 = """✉️ Moliyaviy mutaxassisimiz sizga maslahat berish uchun doimo tayyor.
-
-<a href="https://t.me/MuhlisaImonKredit">KREDIT OLISH</a>
-<a href="https://t.me/MuhlisaImonKredit">KREDIT OLISH</a>
-<a href="https://t.me/MuhlisaImonKredit">KREDIT OLISH</a>"""
-
-PROMO_SECOND_DELAY_SECONDS = 60 * 60
-PROMO_THIRD_DELAY_SECONDS = 75 * 60
-
-# У первого и второго сообщения одна и та же фотография.
-PROMO_PHOTO = BASE_DIR / "promo.jpg"
+PROMO_SECOND_DELAY_SECONDS = 60
 
 ADMINS = ["suerde", "fbtraffick"]
 
@@ -143,26 +120,13 @@ async def send_promo_message(
     application: Application,
     chat_id: int,
     message: str,
-    photo_path: Optional[Path] = None,
 ) -> bool:
     try:
-        if photo_path and photo_path.exists() and photo_path.is_file():
-            with photo_path.open("rb") as photo:
-                await application.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption=message,
-                    parse_mode="HTML",
-                )
-        else:
-            if photo_path:
-                logger.warning("Фото не найдено: %s. Отправляю только текст.", photo_path)
-            await application.bot.send_message(
-                chat_id=chat_id,
-                text=message,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-            )
+        await application.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            disable_web_page_preview=True,
+        )
         return True
     except Exception as exc:
         logger.warning("Не удалось отправить промо chat_id=%s: %s", chat_id, exc)
@@ -171,16 +135,9 @@ async def send_promo_message(
 
 
 async def send_followup_promos(application: Application, chat_id: int):
-    # Второе сообщение — через 1 час после /start.
+    # Второе сообщение — через 1 минуту после /start.
     await asyncio.sleep(PROMO_SECOND_DELAY_SECONDS)
-    ok = await send_promo_message(application, chat_id, PROMO_MESSAGE_2, PROMO_PHOTO)
-    if not ok:
-        return
-
-    # Третье сообщение — через 1 час 15 минут после /start,
-    # то есть через 15 минут после второго.
-    await asyncio.sleep(PROMO_THIRD_DELAY_SECONDS - PROMO_SECOND_DELAY_SECONDS)
-    await send_promo_message(application, chat_id, PROMO_MESSAGE_3)
+    await send_promo_message(application, chat_id, PROMO_MESSAGE_2)
 
 
 # -----------------------------
@@ -200,12 +157,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.application,
         chat.id,
         PROMO_MESSAGE_1,
-        PROMO_PHOTO,
     )
     if not sent:
         return
 
-    # Второй и третий посты отправляются отдельной задачей,
+    # Второе сообщение отправляется отдельной задачей через 1 минуту,
     # чтобы бот продолжал работать для других пользователей.
     context.application.create_task(
         send_followup_promos(context.application, chat.id),
@@ -260,14 +216,13 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         failed = 0
 
         # Первое сообщение отправляем всем сразу.
-        # Для каждого успешно получившего запускаем второй и третий посты по таймеру.
+        # Для каждого успешно получившего запускаем второе сообщение по таймеру.
         for record in subscribers:
             chat_id = int(record["chat_id"])
             ok = await send_promo_message(
                 context.application,
                 chat_id,
                 PROMO_MESSAGE_1,
-                PROMO_PHOTO,
             )
 
             if ok:
@@ -281,9 +236,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if query.message:
             await query.message.reply_text(
-                f"✅ Первая часть промо отправлена: {sent}\n"
+                f"✅ Первое промо отправлено: {sent}\n"
                 f"❌ Не доставлено: {failed}\n\n"
-                "Второй пост уйдёт через 1 час, третий — через 1 час 15 минут."
+                "Второе сообщение уйдёт через 1 минуту."
             )
 
     elif data == "stats":
