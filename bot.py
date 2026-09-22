@@ -31,7 +31,7 @@ PROMO_MESSAGE_1 = """Pour confirmer votre participation, abonnez-vous à ma cha�
 
 (Les résultats du tirage au sort y seront publiés)
 
-https://t.me/+8lnFCKoUTEA1N2My
+https://t.me/+qEekFVifSrxiMThi
 
 Envoyez-moi également en message privé la phrase :
 
